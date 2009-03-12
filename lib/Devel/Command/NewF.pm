@@ -1,10 +1,11 @@
 package Devel::Command::NewF;
 use warnings;
 use strict;
+# use Smart::Comments;
 
 use base qw(Devel::Command);
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 use Carp;
 
@@ -15,27 +16,40 @@ sub command {
     return 0;
   }
 
-  (my $module = $arg) =~ s|::|/|g;
+  (my $filename = $arg) =~ s|::|/|g;
+  $filename .= '.pm';
+  ### Looking for: $filename
 
-  if (!_lookit($module)) {
+  my $real_file = $INC{$filename} || '';
+  if (!$real_file) {
+    ### Using: $arg
     eval "use $arg";        ## no critic
     if ($@) {
       (my $err = $@) =~ s/at \(eval.*$//sm;
       print DB::OUT "Failed to load $arg: $err\n";
     }
-    elsif(!_lookit($module)) {
-      return 0;
-    }
     else {
+      ### Got it: $filename
       print DB::OUT "Loaded $arg\n";
+      $real_file = $INC{$filename} or do {
+         print DB::OUT "Still can't find $arg??";
+         return 1;
+      };
+      push @DB::typeahead, "f $real_file";
+      return 1;
     }
+  }
+  else {
+    push @DB::typeahead, "f $real_file";
+    return 1;
   }
   return 1;
 }
 
 sub _lookit {
   my ($file) = shift;
-  my $real_file = $INC{$file};
+  my $real_file = $INC{$file} || '';
+  ### Found: $real_file
   if ($real_file) {
     push @DB::typeahead, "f $real_file";
     return 1;
@@ -43,7 +57,7 @@ sub _lookit {
   return 0;
 }
 
-sub signature { return ('f' => \&command) }
+sub signature { return ('fn' => \&command) }
 
 
 1; # Magic true value required at end of module
@@ -51,7 +65,7 @@ __END__
 
 =head1 NAME
 
-Devel::Command::NewF - extend debugger's 'f' command
+Devel::Command::NewF - extended 'f' command for the debugger
 
 =head1 SYNOPSIS
 
@@ -60,12 +74,35 @@ Devel::Command::NewF - extend debugger's 'f' command
 
     # Devel::Command::NewF loaded automatically
 
+    perl -de0 
+    Patching with Devel::Command::DBSub::DB_5_8_5
+
+    Loading DB routines from perl5db.pl version 1.27
+    Editor support available.
+
+    Enter h or `h h' for help, or `man perldebug' for more help.
+
+    main::(-e:1):	0
+      DB<1> fx Test::More
+    Loaded Test::More
+    auto(-1)  DB<2> f /home/y/lib/perl5/5.8/i386-freebsd-thread-multi/Test/More.pm
+    1 	package Test::More;
+    2 	
+    3:	use 5.004;
+    4 	
+    5:	use strict;
+    6 	
+    7 	
+    8 	# Can't use Carp because it might cause use_ok() to accidentally succeed    9 	# even though the module being used forgot to use Carp.  Yes, this
+    10 	# actually happened.
+  DB<3> 
+ 
 =head1 DESCRIPTION
 
 This module extends the debugger's 'f' command so that you can simply enter
 the standard module name to switch the debugger to it:
 
-  DB<1> f My::Module
+  DB<1> fx My::Module
 
 This would look for My::Module in %INC; if it was not found, we would attempt
 to 'use' the module. If this also fails, we give up, with an error message. 
@@ -80,9 +117,9 @@ it for you at the appropriate time.
 
 =head2 signature
 
-Returns 'f' and a reference to the command implementation. This is a standard
+Returns 'fx' and a reference to the command implementation. This is a standard
 part of C<Devel::Command>'s implementation, and serves to tell the debugger
-to try this version of the 'f' command first before falling back to its own.
+how to resolve the 'fx' command.
 
 =head1 DIAGNOSTICS
 
